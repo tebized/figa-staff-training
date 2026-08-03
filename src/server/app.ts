@@ -36,13 +36,16 @@ function isDatabaseConnectivityError(err: any): boolean {
   // real one on `.cause` — check both so the classification survives that
   // wrapping instead of silently falling through to a generic 500.
   const code = err?.code || err?.cause?.code;
+  const message = err?.message || err?.cause?.message || '';
   return (
     code === 'ECONNREFUSED' ||
     code === 'ENOTFOUND' ||
     code === 'ETIMEDOUT' ||
+    code === 'ECONNRESET' ||
     code === '28P01' || // invalid password
     code === '3D000' || // database does not exist
-    code === '28000' // invalid authorization
+    code === '28000' || // invalid authorization
+    message.includes('EMAXCONNSESSION') // Supabase pooler connection cap reached
   );
 }
 

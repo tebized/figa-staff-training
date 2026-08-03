@@ -32,7 +32,11 @@ function buildPoolConfig(): PoolConfig {
   if (databaseUrl) {
     return {
       connectionString: databaseUrl,
-      max: 10,
+      // Kept low deliberately: Supabase's pooler caps total concurrent
+      // clients per project (session mode: pool_size, typically 15), and
+      // each serverless function instance keeps its own independent pool —
+      // several warm instances at max:10 each blew through that limit.
+      max: 5,
       connectionTimeoutMillis: 15000,
       // The DB is a remote hosted instance (e.g. Supabase), so each new TCP+TLS
       // connection costs ~1.5-2.5s of round trips before a query even runs.
@@ -84,11 +88,12 @@ export const createPool = () => {
       console.error('[db] Unexpected error on idle SQL pool client:', err.message);
     });
 
-    // Open a few connections up front instead of waiting for the first
-    // request to pay the connect cost. Errors here are non-fatal — the pool
-    // will just retry lazily on the next real query.
+    // Open one connection up front instead of waiting for the first request
+    // to pay the connect cost. Errors here are non-fatal — the pool will
+    // just retry lazily on the next real query. Deliberately just one (not
+    // several) to stay well under the pooler's shared connection cap.
     const pool = global._postgresPool;
-    Promise.all([pool.query('SELECT 1'), pool.query('SELECT 1'), pool.query('SELECT 1')]).catch(() => {});
+    pool.query('SELECT 1').catch(() => {});
   }
   return global._postgresPool;
 };
