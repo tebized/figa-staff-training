@@ -44,6 +44,16 @@ function formatDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString();
 }
 
+async function fetchJson(url: string) {
+  const res = await fetch(url, { credentials: 'include' });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = typeof json?.error === 'string' ? json.error : json?.error?.message;
+    throw new Error(message || `Request failed (${res.status})`);
+  }
+  return json;
+}
+
 export const StaffDetail: React.FC<StaffDetailProps> = ({ staffId, onBack }) => {
   const [header, setHeader] = useState<StaffDetailHeader | null>(null);
   const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
@@ -73,11 +83,11 @@ export const StaffDetail: React.FC<StaffDetailProps> = ({ staffId, onBack }) => 
     (async () => {
       try {
         const [h, a, v, q, c] = await Promise.all([
-          fetch(`/api/admin/staff/${staffId}`, { credentials: 'include' }).then((r) => r.json()),
-          fetch(`/api/admin/staff/${staffId}/assignments`, { credentials: 'include' }).then((r) => r.json()),
-          fetch(`/api/admin/staff/${staffId}/video-activity`, { credentials: 'include' }).then((r) => r.json()),
-          fetch(`/api/admin/staff/${staffId}/quiz-attempts`, { credentials: 'include' }).then((r) => r.json()),
-          fetch(`/api/admin/staff/${staffId}/completion-history`, { credentials: 'include' }).then((r) => r.json()),
+          fetchJson(`/api/admin/staff/${staffId}`),
+          fetchJson(`/api/admin/staff/${staffId}/assignments`),
+          fetchJson(`/api/admin/staff/${staffId}/video-activity`),
+          fetchJson(`/api/admin/staff/${staffId}/quiz-attempts`),
+          fetchJson(`/api/admin/staff/${staffId}/completion-history`),
         ]);
         if (cancelled) return;
         setHeader(h);
@@ -86,7 +96,7 @@ export const StaffDetail: React.FC<StaffDetailProps> = ({ staffId, onBack }) => 
         setQuizAttempts(q);
         setCompletions(c);
       } catch (err: any) {
-        if (!cancelled) setError('Failed to load staff detail.');
+        if (!cancelled) setError(err.message || 'Failed to load staff detail.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -98,21 +108,31 @@ export const StaffDetail: React.FC<StaffDetailProps> = ({ staffId, onBack }) => 
 
   useEffect(() => {
     if (tab !== 'timeline') return;
+    let cancelled = false;
     setTimelineLoading(true);
-    fetch(`/api/admin/staff/${staffId}/timeline?page=${timelinePage}&pageSize=20`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then(setTimeline)
-      .finally(() => setTimelineLoading(false));
+    fetchJson(`/api/admin/staff/${staffId}/timeline?page=${timelinePage}&pageSize=20`)
+      .then((json) => {
+        if (!cancelled) setTimeline(json);
+      })
+      .catch(() => {
+        if (!cancelled) setTimeline({ events: [], page: 1, pageSize: 20, totalCount: 0, totalPages: 1 });
+      })
+      .finally(() => {
+        if (!cancelled) setTimelineLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [tab, staffId, timelinePage]);
 
   const openSessions = async (v: StaffVideoActivity) => {
     setSessionModalVideo(v);
     setSessionsLoading(true);
     try {
-      const res = await fetch(`/api/admin/staff/${staffId}/video-activity/${v.videoId}/sessions`, {
-        credentials: 'include',
-      });
-      setSessions(await res.json());
+      const json = await fetchJson(`/api/admin/staff/${staffId}/video-activity/${v.videoId}/sessions`);
+      setSessions(json);
+    } catch {
+      setSessions([]);
     } finally {
       setSessionsLoading(false);
     }
