@@ -47,7 +47,12 @@ function isDatabaseConnectivityError(err: any): boolean {
 }
 
 function sendServerError(res: express.Response, err: any, context: string) {
-  console.error(`[${context}]`, err?.message || err);
+  const cause = err?.cause;
+  console.error(
+    `[${context}]`,
+    err?.message || err,
+    cause ? `| cause: code=${cause.code} message=${cause.message}` : ''
+  );
   if (isDatabaseConnectivityError(err)) {
     return res.status(503).json({
       error: {
