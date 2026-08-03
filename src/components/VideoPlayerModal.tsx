@@ -65,7 +65,6 @@ export const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({
     score: number;
     passed: boolean;
     message: string;
-    questionResults?: any[];
   } | null>(null);
   const [submittingQuiz, setSubmittingQuiz] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
